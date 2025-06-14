@@ -27,8 +27,8 @@ to help you understand how it works in practice.
 
 ### Talk
 
-To get more of an idea of Fern, you can our CppCon talk. Fern has evolved quite
-a bit since then, but the design philosophy at the heart of Fern has remained
+You can also watch our CppCon talk about Fern. Fern has evolved quite
+a bit since then, but the design philosophy at its core has remained
 the same.
 
 <div style="text-align: center;">
