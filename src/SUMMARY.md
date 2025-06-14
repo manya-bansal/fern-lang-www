@@ -1,5 +1,6 @@
 # Summary
 
-- [Chapter 1](./chapter_1.md)
+- [What is Fern](./what_is_fern.md)
+- [Operator Fusion](./fusion.md)
 - [Installation](./install.md)
-- [First Function Call](./tutorial/1_trivial.md)
+- [Tutorial](./tutorial/overview.md)

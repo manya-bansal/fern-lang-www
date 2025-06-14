@@ -3,8 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Fern</title>
-        <meta name="robots" content="noindex">
+        <title>What is Fern - Fern</title>
 
 
         <!-- Custom HTML head -->
@@ -180,135 +179,15 @@ the same.</p>
 <div style="text-align: center;">
     <iframe width="560" height="315" src="https://www.youtube.com/embed/pEcOZDRXhNM?si=8q2EeHAD2LNppECr" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 </div>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="an-introduction-to-operator-fusion"><a class="header" href="#an-introduction-to-operator-fusion">An Introduction to Operator Fusion</a></h1>
-<h2 id="a-simple-example"><a class="header" href="#a-simple-example">A Simple Example</a></h2>
-<p>Consider a simple function that takes in an array of floats <code>$a$</code>,
-and adds 1 to each element, storing its output in <code>$b$</code>:</p>
-<pre><code class="language-C++">void add_1(float * a, float *b, int N){
-    for (int i = 0; i &lt; N; i++){
-        b[i] = a[i] + 1;
-    }
-}
-</code></pre>
-<p>To perform 2 to elements to an array, we can simply call <code>add_1</code> twice:</p>
-<pre><code class="language-C++">    float * a  = (float *) malloc(N * sizeof(float)) 
-    float * b  = (float *) malloc(N * sizeof(float)) 
-    float * c  = (float *) malloc(N * sizeof(float)) 
-    add_1(b, a, N);
-    add_1(c, b, N);
-</code></pre>
-<p>or, we can implement a special  <code>add_2</code> function:</p>
-<pre><code class="language-C++">void add_2(float * a, float *b, int N){
-    for (int i = 0; i &lt; N; i++){
-        b[i] = a[i] + 2;
-    }
-}
-</code></pre>
-<p>and simply call it:</p>
-<pre><code class="language-C++">    float * a  = (float *) malloc(N * sizeof(float)) 
-    float * c  = (float *) malloc(N * sizeof(float)) 
-    add_2(c, a, N);
-</code></pre>
-<p>The <code>add_2</code> function not only uses less memory, requiring no allocation for an
-intermediate, it also takes advantage of <em>locality</em>. Each float is loaded once
-and all operations are applied immediately, when the data is ready. This
-technique of applying a sequence of operations back-to-back on susbets of data
-rather than computing entire intermediate outputs is called <strong>operator fusion</strong>.</p>
-<p>Traditionally, your favorite compiler runs a fusion pass, bringing computations
-into the same outer-loop scope when it can determine that the transformation is
-correct. While these passes typically fuse at single data element granularity,
-one can also generalize this idea to instead think about fusion happening at
-different granularities (4 elements, 8 elements, tiles of data, etc.).</p>
-<h2 id="operator-fusion-in-practice"><a class="header" href="#operator-fusion-in-practice">Operator Fusion in Practice</a></h2>
-<p>High-performance applications are often built as compositions of function calls,
-many sourced from mature, highly optimized libraries like CBLAS.  On Apple’s M3
-chip, the fastest implementations of the CBLAS interface can be found in
-frameworks such as Accelerate and Arm Performance Libraries.</p>
-<blockquote>
-<p>CBLAS itself contains several fused interfaces. For example, cblas_sgemm
-performs a matrix-matrix multiplication with optional transposition and
-scaling, all in a single call.</p>
-</blockquote>
-<p>Say we want to compute a General Vector Rank Update (GER)
-operation expressed as \( A = \alpha (x \times y^T) + A \) where \( A \) is
-a matrix, \( x \) and  \( y \) are vectors, \( \alpha \) is a scalar, and
-all datatypes are floats. Both Accelerate and ArmPL offer implementations of
-this operation, and their performance is pretty close.</p>
-<div style="text-align: center;">
-  <img src="./images/sger.png" alt="Diagram from PDF" style="width: 300px;" />
-</div>
-<p>If we were to comupute a slight variant of our computation, an SGERB \( A = \alpha (x
-\times y^T) + \beta A \), we have two options. First,
-we can use ArmPL’s fused BLAS extension interfaces that include an <code>sgerb_</code> subroutine. Or, as
-Accelerate has no fused subroutine, we can compose Accelerate’s <code>cblas_sger</code> and <code>cblas_saxpy</code>
-subroutines.</p>
-<div style="text-align: center;">
-  <img src="./images/sgerb.png" alt="Diagram from PDF" style="width: 300px;" />
-</div>
-<p>However, the fused ArmPL subroutine is 1.24× (geomean) faster than the composed
-Accelerate implementation. Since Accelerate already matched ArmPL’s performance
-on GER, the performance difference between the two implementations on GERB is
-not due to an under-optimized inner loop or poor instruction selection, but is
-rather introduced at the point of composition. ArmPL is able to <em>fuse</em> its
-computation, resulting in the difference that we see.</p>
-<p>In our trivial example with <code>add_1</code>, we could quickly write a fused
-implementation. However, in this case, we are stuck: each routine <code>cblas_sger</code>
-and <code>cblas_saxpy</code> likely contains hundereds of lines of hairy,
-architecture-specific code that would be time consuming to rewrite and error prone
-to modify. Worse, both ArmPL and Accelerate are propriety frameworks. In fact, the
-Accelerate library is the only way to target undocumented, Apple-specific
-hardware. If our user wants to use this special hardware, they are tied to the
-Accelerate library, which does not have extended BLAS kernels like
-<code>sgerb_</code>. But, if our user wants to use fused implementations provided in
-the BLAS extension interface, they must use ArmPL.</p>
-<p>Instead of using naive subroutine calls for Accelerate, the user can use code
-generated by Fern, which continues to call Accelerate subroutines, but does so
-for small tiles of the output at a time. To see how to do this, head to the
-<a href="./tutorial/overview.html">tutorial</a>.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
-<blockquote>
-<p>Fern is now supported by the Gern repository. Gern adds support for GPUs and
-contains Fern-style CPU support. Gern is under 🚧 active development 🚧.</p>
-</blockquote>
-<p>Fern is an open-source project available at
-<a href="https://github.com/manya-bansal/gern">https://github.com/manya-bansal/gern</a>.</p>
-<p>It is written in C++20 and requires CMake version 3.30 or higher to build.</p>
-<h2 id="getting-the-repository"><a class="header" href="#getting-the-repository">Getting the Repository</a></h2>
-<p>First, clone the repository from github.</p>
-<pre><code class="language-bash">$ git clone git@github.com:manya-bansal/gern.git
-</code></pre>
-<h2 id="installing-dependencies"><a class="header" href="#installing-dependencies">Installing Dependencies</a></h2>
-<h3 id="vcpkg"><a class="header" href="#vcpkg">VCPKG</a></h3>
-<p>Fern uses <a href="https://github.com/microsoft/vcpkg"><code>vcpkg</code></a> to manage its
-dependencies. Follow the official guide to download and install <code>vcpkg</code>: <a href="https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-powershell#1---set-up-vcpkg">Get Started with
-vcpkg</a></p>
-<p>Once installed, set the <code>VCPKG_ROOT</code> environment variable to point to your
-<code>vcpkg</code> directory.</p>
-<h3 id="cmake"><a class="header" href="#cmake">CMake</a></h3>
-<p>Fern uses <code>cmake</code> as its build system. Before building Fern, ensure that <code>cmake</code>
-is installed on your system. Fern requires cmake 3.30 and above.</p>
-<p>You can download the latest version of CMake from the official website: <a href="https://cmake.org/download/">CMake
-Downloads</a></p>
-<h2 id="building-fern"><a class="header" href="#building-fern">Building Fern</a></h2>
-<p>Now that <code>VCPKG_ROOT</code> is set and you have downloaded the repository, build the
-repository from the <code>gern</code> directory:</p>
-<pre><code class="language-bash">$ cmake -DGern_CUDA_ARCH=&lt;89,90..,etc&gt; --preset dev 
-$ cmake --build build/dev
-</code></pre>
-<p>If <code>-DGern_CUDA_ARCH</code> is not set, none of the GPU kernels will be run during
-tests.</p>
-<h2 id="running-tests"><a class="header" href="#running-tests">Running Tests</a></h2>
-<p>To run tests, execute:</p>
-<pre><code class="language-bash">$ ctest --test-dir build/dev
-</code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="overview"><a class="header" href="#overview">Overview</a></h1>
-<p>Coming Soon!</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
 
+                            <a rel="next prefetch" href="fusion.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -317,10 +196,29 @@ tests.</p>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
 
+                    <a rel="next prefetch" href="fusion.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
             </nav>
 
         </div>
 
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
 
 
 
@@ -339,13 +237,6 @@ tests.</p>
 
         <!-- Custom JS scripts -->
 
-        <script>
-        window.addEventListener('load', function() {
-            MathJax.Hub.Register.StartupHook('End', function() {
-                window.setTimeout(window.print, 100);
-            });
-        });
-        </script>
 
     </div>
     </body>
