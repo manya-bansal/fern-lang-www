@@ -325,7 +325,7 @@ automatically inferred.</p>
 <li><a href="tutorial/./6_tiling.html">Understanding Legal Tilings</a></li>
 <li><a href="tutorial/./7_reductions.html">Tiling Through Reductions</a></li>
 </ol>
-<div style="break-before: page; page-break-before: always;"></div><h2 id="making-a-function-call-in-fern"><a class="header" href="#making-a-function-call-in-fern">Making a Function Call in Fern</a></h2>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="making-a-function-call-in-fern"><a class="header" href="#making-a-function-call-in-fern">Making a Function Call in Fern</a></h1>
 <p>The easiest program to write in Fern is one that makes a single function call:</p>
 <pre><code class="language-C++">#include "helpers.h"
 
@@ -482,7 +482,7 @@ is hiding:</p>
 }
 </code></pre>
 <p><code>Runner::Options</code> contains more choices for flags that can be set.</p>
-<div style="break-before: page; page-break-before: always;"></div><h2 id="calling-multiple-functions"><a class="header" href="#calling-multiple-functions">Calling multiple functions</a></h2>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="calling-multiple-functions"><a class="header" href="#calling-multiple-functions">Calling multiple functions</a></h1>
 <p>Now that we know how to write and execute Fern pipelines with one function,
 let's turn our attention to longer pipelines. Here's our previous pipeline,
 but now with one additional function call:</p>
@@ -555,7 +555,7 @@ optimize for reuse of temporaries and hoisting them out). Therefore, only "true"
 inputs and the "true" output is passed in.</p>
 <p>At this point, you might have a lingering question: how did Fern figure out what
 allocate call to make in the first place?</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="matrix-program"><a class="header" href="#matrix-program">Matrix program</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="demystifying-data-structures"><a class="header" href="#demystifying-data-structures">Demystifying Data Structures</a></h1>
 <p>The last piece to unpack before we begin fusing programs is the set of data
 structures we've been using in our program definitions. Just like the <code>add_1</code>
 function, these data structures are also part of the overall program definition
@@ -674,7 +674,7 @@ array, we can write a program that uses the matrix!</p>
     }
 }
 </code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="tiling-a-multi-function-program"><a class="header" href="#tiling-a-multi-function-program">Tiling a multi-function program</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tiling-a-multi-function-program"><a class="header" href="#tiling-a-multi-function-program">Tiling a Multi-Function Program</a></h1>
 <p>Finally, we can start rewriting tiling programs
 and producing fused variants.</p>
 <p>Let's go back to the annotation function that we saw
@@ -757,7 +757,7 @@ int main() {
     }
 }
 </code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h2 id="more-tilings"><a class="header" href="#more-tilings">More Tilings</a></h2>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="more-tilings"><a class="header" href="#more-tilings">More Tilings</a></h1>
 <p>Let's look at more tilings that Gern allows programmers to write:</p>
 <pre><code class="language-C++">    // Outputs can be double tiled!
     Composable program({
@@ -822,7 +822,7 @@ void function_9(library::impl::ArrayCPU &amp;input, library::impl::ArrayCPU &amp
 intends to produce, and each statement yields a data structure. Tilings are
 permitted only for the data structure that is the final output of the current
 program scope.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="reductions"><a class="header" href="#reductions">Reductions</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tiling-through-reductions"><a class="header" href="#tiling-through-reductions">Tiling Through Reductions</a></h1>
 <pre><code class="language-C++">#include "helpers.h"
 #include "library/array/annot/cpu-array.h"
 #include "library/array/impl/cpu-array.h"

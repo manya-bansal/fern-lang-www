@@ -1,4 +1,4 @@
-# Tiling a multi-function program 
+# Tiling a Multi-Function Program 
 
 
 Finally, we can start rewriting tiling programs

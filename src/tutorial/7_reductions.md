@@ -1,4 +1,4 @@
-# Reductions
+# Tiling Through Reductions
 
 ```C++
 #include "helpers.h"

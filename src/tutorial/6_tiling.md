@@ -1,4 +1,4 @@
-## More Tilings
+# More Tilings
 
 
 Let's look at more tilings that Gern allows programmers to write:

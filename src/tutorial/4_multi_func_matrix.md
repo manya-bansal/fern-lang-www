@@ -1,4 +1,4 @@
-# Matrix program
+# Demystifying Data Structures 
 
 The last piece to unpack before we begin fusing programs is the set of data
 structures we've been using in our program definitions. Just like the `add_1`

@@ -1,4 +1,4 @@
-## Calling multiple functions
+# Calling multiple functions
 
 Now that we know how to write and execute Fern pipelines with one function,
 let's turn our attention to longer pipelines. Here's our previous pipeline,

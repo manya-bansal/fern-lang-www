@@ -1,4 +1,4 @@
-## Making a Function Call in Fern
+# Making a Function Call in Fern
 
 The easiest program to write in Fern is one that makes a single function call:
 
