@@ -182,8 +182,8 @@ the same.</p>
 </div>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="an-introduction-to-operator-fusion"><a class="header" href="#an-introduction-to-operator-fusion">An Introduction to Operator Fusion</a></h1>
 <h2 id="a-simple-example"><a class="header" href="#a-simple-example">A Simple Example</a></h2>
-<p>Consider a simple function that takes in an array of floats <code>$a$</code>,
-and adds 1 to each element, storing its output in <code>$b$</code>:</p>
+<p>Consider a simple function that takes in an array of floats <code>a</code>,
+and adds 1 to each element, storing its output in <code>b</code>:</p>
 <pre><code class="language-C++">void add_1(float * a, float *b, int N){
     for (int i = 0; i &lt; N; i++){
         b[i] = a[i] + 1;
@@ -302,7 +302,521 @@ tests.</p>
 <pre><code class="language-bash">$ ctest --test-dir build/dev
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="overview"><a class="header" href="#overview">Overview</a></h1>
-<p>Coming Soon!</p>
+<p>The tutorial walks you through different programs in Fern with increasing
+complexity. The interface to Fern has changed from the paper, though it is
+equally powerful.</p>
+<p>As opposed to thinking about an explicit separation between algorithm and
+schedule—where the schedule is a meta-program describing how lowering might
+proceed—the new interface is a "sketch" of the loop nest the user wants the
+generated program to have. This sketch is then deterministically lowered into
+imperative code, with the compiler filling in any details that can be
+automatically inferred.</p>
+<p>The tutorial is organized as follows:</p>
+<ol>
+<li><a href="tutorial/./1_trivial.html">Making our first function call</a></li>
+<li><a href="tutorial/./2_running.html">Running our first function call</a></li>
+<li><a href="tutorial/./3_multi_func.html">Writing a Multi-Function Pipeline</a></li>
+<li><a href="tutorial/./4_multi_dunc_matrix.html">Understaning Data Structures</a></li>
+<li><a href="tutorial/./5_tiling.html">Tiling Programs</a></li>
+<li><a href="tutorial/./6_tiling.html">Understanding Legal Tilings</a></li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div><h2 id="making-a-function-call-in-fern"><a class="header" href="#making-a-function-call-in-fern">Making a Function Call in Fern</a></h2>
+<p>The easiest program to write in Fern is one that makes a single function call:</p>
+<pre><code class="language-C++">#include "helpers.h"
+
+int main() {
+
+    // Our first, simple program.
+    auto a = mk_array("a");
+    auto b = mk_array("b");
+
+    // Gern object that represents a function.
+    gern::annot::add_1 add_1;
+
+    Composable program = {
+    // the () operator calls the function, and 
+    // generates a "call site".
+        add_1(a, b),
+    };
+
+    // The program can now be compiled.
+    compile_program(program);
+}
+</code></pre>
+<p>Let's look at the different pieces of the <code>add_1</code> object carefully:</p>
+<pre><code class="language-C++">class add_1 : public gern::AbstractFunction {
+public:
+    add_1()
+        : input(new const ArrayCPU("input")),
+          output(new const ArrayCPU("output")) {
+    }
+
+    /* getAnnotation() returns the data production
+     * and consumption pattern of the function.
+     * See Tiling Programs in the tutorial for more
+     * details if you'd like to skip ahead!
+    */
+    Annotation getAnnotation() override { 
+        Variable x("x");
+
+        return annotate(
+            Tileable(x = Expr(0), output["size"], step,
+                     Produces::Subset(output, {x, step}),
+                     Consumes::Subset(input, {x, step})));
+    }
+
+     /* getFunction() returns the "C++" signature of the
+      * Function that we ultimately use to generate code. 
+     */
+    virtual FunctionSignature getFunction() override {
+        FunctionSignature f;
+        f.name = "library::impl::add_1"; // &lt;-- Name of the Function
+        f.args = {Parameter(input), Parameter(output)}; // &lt;-- Parameters of the function 
+        // Also contains template arguments which has been left empty.
+        return f;
+    }
+
+    /**  The file that the function declration lives in, this is included
+     *   in the generated file.
+     */
+    std::vector&lt;std::string&gt; getHeader() override {
+        return {
+            "cpu-array.h",
+        };
+    }
+
+protected:
+    AbstractDataTypePtr input;
+    AbstractDataTypePtr output;
+    Variable end{"end"};
+    Variable step{"step"};
+};
+</code></pre>
+<p>Given our Fern program and the function definition, when we
+compile the program, we simply get a function that makes a
+single call (we have not tiled our program yet!):</p>
+<pre><code class="language-C++">#include "cassert"
+#include "cpu-array.h" // Our include file!
+
+// An automatically generated wrapper function name.
+void function_3(library::impl::ArrayCPU&amp; a, library::impl::ArrayCPU&amp; b){
+      library::impl::add_1(a, b); // the actual function call!
+}
+</code></pre>
+<p>Fern writes the generated code into a file which can then be included in a
+project, and run like normal.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="running-our-trivial-program"><a class="header" href="#running-our-trivial-program">Running our trivial program</a></h1>
+<p><a href="tutorial/./1_trivial.html">Part one</a> demonstrated how to write a trivial, single
+function program. To run it, we had to figure out where the generated
+file lives, include it, compile and then execute it. While this works, it's
+still annoying to keep including a file into the project just to
+execute it. To avoid this, Fern also provides an interface for
+jitting and loading the function pointer, so the code can be compiled
+and executed more ergonomically.</p>
+<p>In this case, we can consider the program as being split into two parts:
+program definition and program execution.</p>
+<pre><code class="language-C++">#include "helpers.h"
+#include "library/array/impl/cpu-array.h"
+
+int main() {
+
+    // ***** PROGRAM DEFINITION *****
+    // Our first, simple program.
+    auto a_def = mk_array("input");
+    auto b_def = mk_array("output");
+
+    gern::annot::add_1 add_1;
+
+    Composable program = {
+        add_1(a_def, b_def),
+    };
+
+    // ***** PROGRAM EVALUATION *****
+    // Compile turns a runner object which can be
+    // used to run the program.
+    auto runner = compile_program(program);
+
+    library::impl::ArrayCPU a(10);
+    a.ascending();
+    library::impl::ArrayCPU b(10);
+
+    // Evaluate the program. The 
+    // function takes in a map, and 
+    // corresponding names of the inputs and
+    // outputs. Fern will wire these up correctly! 
+    runner.evaluate({
+        {"output", &amp;b},
+        {"input", &amp;a},
+    });
+
+    // Make sure we got the right answer.
+    for (int i = 0; i &lt; 10; i++) {
+        std::cout &lt;&lt; "a[" &lt;&lt; i &lt;&lt; "] = " &lt;&lt; a.data[i]
+                  &lt;&lt; ", b[" &lt;&lt; i &lt;&lt; "] = " &lt;&lt; b.data[i] &lt;&lt; std::endl;
+        assert(a.data[i] + 1 == b.data[i]);
+    }
+}
+</code></pre>
+<p>It is worthwhile breaking down what the <code>compile_program</code> helper
+is hiding:</p>
+<pre><code class="language-C++">inline Runner compile_program(Composable program,
+                              std::string name = "program.cpp") {
+    Runner runner(program);
+    Runner::Options options{
+        // Name of the generated file
+        .filename = name,
+        // Path where the file should be put.
+        .prefix = "/home/manya/gern/prez/gern_gen",
+        // Paths to include
+        .include = " -I /home/manya/gern/prez/library/array/impl"
+                   " -I /home/manya/gern/prez/library/matrix/impl",
+    };
+    // Compile the program!
+    runner.compile(options);
+    return runner;
+}
+</code></pre>
+<p><code>Runner::Options</code> contains more choices for flags that can be set.</p>
+<div style="break-before: page; page-break-before: always;"></div><h2 id="calling-multiple-functions"><a class="header" href="#calling-multiple-functions">Calling multiple functions</a></h2>
+<p>Now that we know how to write and execute Fern pipelines with one function,
+let's turn our attention to longer pipelines. Here's our previous pipeline,
+but now with one additional function call:</p>
+<pre><code class="language-C++">#include "helpers.h"
+#include "library/array/impl/cpu-array.h"
+
+int main() {
+
+    // ***** PROGRAM DEFINITION *****
+    // Our first, simple program.
+    auto input = mk_array("input");
+    auto temp = mk_array("temp");
+    auto output = mk_array("output");
+
+    gern::annot::add_1 add_1;
+
+    Composable program({
+        add_1(input, temp),
+        add_1(temp, output), // &lt;--  New Call
+    });
+
+    // ***** PROGRAM EVALUATION *****
+    library::impl::ArrayCPU a(10);
+    a.ascending();
+    library::impl::ArrayCPU b(10);
+
+    auto runner = compile_program(program);
+    runner.evaluate(
+        {
+            {"output", &amp;b},
+            {"input", &amp;a},
+        });
+
+    // SANITY CHECK
+    for (int i = 0; i &lt; 10; i++) {
+        assert(a.data[i] + 2 == b.data[i]);
+    }
+}
+</code></pre>
+<p>As we begin to start writing longer pipelines, there are some rules about writing pipelines
+must observe:</p>
+<ol>
+<li>All data-structures can be assigned to only once.
+<blockquote>
+<p>This means that we could not used <code>temp</code> again as the output of our second call.</p>
+</blockquote>
+</li>
+<li>All intermediates must be used an input at least once.
+<blockquote>
+<p>Fern would have thrown an error in the case that <code>temp</code> was computed, but never
+used as input.</p>
+</blockquote>
+</li>
+</ol>
+<p>There are more rules coming up as we write tiled pipelines!</p>
+<p>While our program defintion contains <code>temp</code>, you might have noticed that the program
+evaluation does not! Indeed, if we look at the generated code, Fern is allocating it:</p>
+<pre><code class="language-C++">void function_5(library::impl::ArrayCPU &amp;input, library::impl::ArrayCPU &amp;output) {
+    library::impl::ArrayCPU temp = library::impl::ArrayCPU::allocate(0, output.size);
+
+    library::impl::add_1(input, temp);
+
+    library::impl::add_1(temp, output);
+
+    temp.destroy();
+}
+</code></pre>
+<p>Fern owns all the temporary/intermediate tensors in a pipeline (and will
+optimize for reuse of temporaries and hoisting them out). Therefore, only "true"
+inputs and the "true" output is passed in.</p>
+<p>At this point, you might have a lingering question: how did Fern figure out what
+allocate call to make in the first place?</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="matrix-program"><a class="header" href="#matrix-program">Matrix program</a></h1>
+<p>The last piece to unpack before we begin fusing programs is the set of data
+structures we've been using in our program definitions. Just like the <code>add_1</code>
+function, these data structures are also part of the overall program definition
+and contain essential information that Fern uses during code generation and
+execution.</p>
+<p>Let's look at the array object that <code>mk_array</code> produces:</p>
+<pre><code class="language-C++">    auto input = mk_array("input");
+</code></pre>
+<pre><code class="language-C++">class ArrayCPU : public gern::AbstractDataType {
+public:
+    // Array must have a name!
+    ArrayCPU(const std::string &amp;name)
+        : name(name) {
+    }
+    // Get the name to use in codegen. 
+    std::string getName() const override {
+        return name;
+    }
+
+    // Get the type to use in codegen. 
+    std::string getType() const override {
+        return "library::impl::ArrayCPU";
+    }
+
+    // The fields of the array are what we will eventually 
+    // use to tile our program! In this represenatation
+    // x denotes about the start of a subarray, while len
+    // denotes the length of the subarray. Gern attaches
+    // no semantic meaning to these fields, it just promises
+    // to wire then up correctly! The ordering here does play a role!
+    std::vector&lt;Variable&gt; getFields() const override {
+        return {x, len};
+    }
+    // How can gern allocate an array?
+    FunctionSignature getAllocateFunction() const override {
+        return FunctionSignature{
+            .name = "library::impl::ArrayCPU::allocate",
+            .args = {x, len},
+        };
+    }
+    // How can gern free an array?
+    FunctionSignature getFreeFunction() const override {
+        return FunctionSignature{
+            .name = "destroy",
+            .args = {},
+        };
+    }
+    // If gern has a subarray, how can it insert into a parent array?
+    FunctionSignature getInsertFunction() const override {
+        return FunctionSignature{
+            .name = "insert",
+            .args = {x, len},
+        };
+    }
+
+    // If gern wants to extract a subarray, how can it query it?
+    FunctionSignature getQueryFunction() const override {
+        return FunctionSignature{
+            .name = "query",
+            .args = {x, len},
+        };
+    }
+
+protected:
+    std::string name;
+    Variable x{"x"};
+    Variable len{"len"};
+};
+</code></pre>
+<p>Similar to our array example, we could have instead used a matrix
+data structure. Let's take a look at the fieds of the matrix:</p>
+<pre><code class="language-C++">  std::vector&lt;Variable&gt; getFields() const override {
+        return {x, y, l_x, l_y};
+  }
+</code></pre>
+<p>Here, <code>x</code> and <code>y</code> point at the start of a submatrix, while
+<code>l_x</code> and <code>l_y</code> denote its height and width. Similar to the
+array, we can write a program that uses the matrix!</p>
+<pre><code class="language-C++">#include "helpers.h"
+#include "library/matrix/annot/cpu-matrix.h"
+#include "library/matrix/impl/cpu-matrix.h"
+
+    int
+    main()
+{
+    // ***** PROGRAM DEFINITION *****
+    auto input = mk_matrix("input");
+    auto output = mk_matrix("output");
+    auto temp = mk_matrix("temp");
+
+    annot::MatrixAddCPU add_1;
+
+    Composable program({
+        add_1(input, temp),
+        add_1(temp, output),
+    });
+
+    // ***** PROGRAM EVALUATION *****
+    library::impl::MatrixCPU a(10, 10, 10);
+    a.ascending();
+    library::impl::MatrixCPU b(10, 10, 10);
+
+    auto runner = compile_program(program);
+    runner.evaluate({
+        {"input", &amp;a},
+        {"output", &amp;b},
+    });
+
+    // ***** SANITY CHECK *****
+    for (int i = 0; i &lt; a.col; i++)
+    {
+        for (int j = 0; j &lt; a.row; j++)
+        {
+            assert(a(i, j) + 2 == b(i, j));
+        }
+    }
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tiling-a-multi-function-program"><a class="header" href="#tiling-a-multi-function-program">Tiling a multi-function program</a></h1>
+<p>Finally, we can start rewriting tiling programs
+and producing fused variants.</p>
+<p>Let's go back to the annotation function that we saw
+<a href="tutorial/./1_trivial.html">previously</a>.</p>
+<pre><code class="language-C++">   Annotation getAnnotation() override { 
+        Variable x("x");
+        return annotate(
+            // Tilable tells us what dimensions of the output
+            // can be tiled.
+            Tileable(x = Expr(0), output["size"], step,
+                     // Produces indicates what subset (pointed at 
+                     // by the fields we saw in the last chapter) 
+                     // of the output we are describing.
+                     Produces::Subset(output, {x, step}),
+                     // What subsets of the input do we need to 
+                     // consume to produce the required output subset?
+                     Consumes::Subset(input, {x, step})));
+    }
+</code></pre>
+<p>Now to generate a fused version, we simply tile the output's dimension! As expected, only fields marked as tileable can be tiled.</p>
+<pre><code class="language-C++">#include "helpers.h"
+#include "library/array/impl/cpu-array.h"
+
+using namespace gern;
+
+int main() {
+
+    // ***** PROGRAM DEFINITION *****
+    // Our first, simple program.
+    auto input = mk_array("input");
+    auto temp = mk_array("temp");
+    auto output = mk_array("output");
+    Variable t("t");
+
+    gern::annot::add_1 add_1;
+
+    Composable program({
+        // Tile the output!
+        // t indicates what the tile
+        // size should be
+        Tile(output["size"], t)(
+            add_1(input, temp),
+            add_1(temp, output)),
+    });
+
+    // ***** PROGRAM EVALUATION *****
+    library::impl::ArrayCPU a(10);
+    a.ascending();
+    library::impl::ArrayCPU b(10);
+    int64_t t_val = 2;
+
+    auto runner = compile_program(program);
+    runner.evaluate(
+        {
+            {"output", &amp;b},
+            {"input", &amp;a},
+            {"t", &amp;t_val}, // &lt;-- t must also be provided now!
+        });
+
+    // SANITY CHECK
+    for (int i = 0; i &lt; 10; i++) {
+        assert(a.data[i] + 2 == b.data[i]);
+    }
+}
+</code></pre>
+<p>Finally, we can look at the generated tiled program:</p>
+<pre><code class="language-C++">void function_7(library::impl::ArrayCPU &amp;input, library::impl::ArrayCPU &amp;output, int64_t t) {
+    for (int64_t _gern_x_2_6 = 0; (_gern_x_2_6 &lt; output.size); _gern_x_2_6 = (_gern_x_2_6 + t)) {
+        auto _query_output_8 = output.query(_gern_x_2_6, t);
+
+        library::impl::ArrayCPU temp = library::impl::ArrayCPU::allocate(_gern_x_2_6, t);
+
+        auto _query_input_9 = input.query(_gern_x_2_6, t);
+
+        library::impl::add_1(_query_input_9, temp);
+
+        library::impl::add_1(temp, _query_output_8);
+
+        temp.destroy();
+    }
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h2 id="more-tilings"><a class="header" href="#more-tilings">More Tilings</a></h2>
+<p>Let's look at more tilings that Gern allows programmers to write:</p>
+<pre><code class="language-C++">    // Outputs can be double tiled!
+    Composable program({
+        // More tiling!
+        Tile(output["size"], t)(
+            Tile(output["size"], t2)(
+                add_1(input, temp),
+                add_1(temp, output))),
+    });
+</code></pre>
+<p>The program produces the output, where the computation is tiled twice:</p>
+<pre><code class="language-C++">void function_9(library::impl::ArrayCPU &amp;input, library::impl::ArrayCPU &amp;output, int64_t t, int64_t t2) {
+    for (int64_t _gern_x_2_6_8 = 0; (_gern_x_2_6_8 &lt; output.size); _gern_x_2_6_8 = (_gern_x_2_6_8 + t)) {
+        for (int64_t _gern_x_2_6 = 0; (_gern_x_2_6 &lt; t); _gern_x_2_6 = (_gern_x_2_6 + t2)) {
+            auto _query_output_10 = output.query((_gern_x_2_6 + _gern_x_2_6_8), t2);
+
+            library::impl::ArrayCPU temp = library::impl::ArrayCPU::allocate((_gern_x_2_6 + _gern_x_2_6_8), t2);
+
+            auto _query_input_11 = input.query((_gern_x_2_6 + _gern_x_2_6_8), t2);
+
+            library::impl::add_1(_query_input_11, temp);
+
+            library::impl::add_1(temp, _query_output_10);
+
+            temp.destroy();
+        }
+    }
+}
+</code></pre>
+<p>Nested pipelines can also be written, for example:</p>
+<pre><code class="language-C++">    Composable program({
+        // More tiling!
+        Tile(output["size"], t)(
+            Tile(temp["size"], t2)(
+                add_1(input, temp)),
+            add_1(temp, output)),
+    });
+</code></pre>
+<p>prododuces the following program:</p>
+<pre><code class="language-C++">
+void function_9(library::impl::ArrayCPU &amp;input, library::impl::ArrayCPU &amp;output, int64_t t, int64_t t2) {
+    for (int64_t _gern_x_2_8 = 0; (_gern_x_2_8 &lt; output.size); _gern_x_2_8 = (_gern_x_2_8 + t)) {
+        auto _query_output_10 = output.query(_gern_x_2_8, t);
+
+        library::impl::ArrayCPU temp = library::impl::ArrayCPU::allocate(_gern_x_2_8, t);
+
+        for (int64_t _gern_x_4_6 = 0; (_gern_x_4_6 &lt; temp.size); _gern_x_4_6 = (_gern_x_4_6 + t2)) {
+            auto _query_temp_11 = temp.query((_gern_x_4_6 + 0), t2);
+
+            auto _query_input_12 = input.query((_gern_x_4_6 + _gern_x_2_8), t2);
+
+            library::impl::add_1(_query_input_12, _query_temp_11);
+        }
+
+        library::impl::add_1(temp, _query_output_10);
+
+        temp.destroy();
+    }
+}
+</code></pre>
+<p>At each point in the program, Fern has a notion of the data structure the user
+intends to produce, and each statement yields a data structure. Tilings are
+permitted only for the data structure that is the final output of the current
+program scope.</p>
 
                     </main>
 

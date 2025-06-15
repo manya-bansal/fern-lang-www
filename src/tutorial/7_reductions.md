@@ -5,6 +5,10 @@
 #include "library/array/annot/cpu-array.h"
 #include "library/array/impl/cpu-array.h"
 
+
+Similar to the tiling the output, users can
+introduce tiling over a "reducible" parameter.
+
 using namespace gern;
 
 int main() {

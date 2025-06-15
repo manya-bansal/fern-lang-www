@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>What is Fern? - Fern</title>
+        <title>Demystifying Data Structures - Fern</title>
 
 
         <!-- Custom HTML head -->
@@ -12,21 +12,21 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="favicon.svg">
-        <link rel="shortcut icon" href="favicon.png">
-        <link rel="stylesheet" href="css/variables.css">
-        <link rel="stylesheet" href="css/general.css">
-        <link rel="stylesheet" href="css/chrome.css">
-        <link rel="stylesheet" href="css/print.css" media="print">
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        <link rel="stylesheet" href="fonts/fonts.css">
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" href="highlight.css">
-        <link rel="stylesheet" href="tomorrow-night.css">
-        <link rel="stylesheet" href="ayu-highlight.css">
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
 
@@ -35,11 +35,11 @@
 
         <!-- Provide site root to javascript -->
         <script>
-            var path_to_root = "";
+            var path_to_root = "../";
             var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "coal" : "rust";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc.js"></script>
+        <script src="../toc.js"></script>
     </head>
     <body>
     <div id="body-container">
@@ -91,7 +91,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
             </noscript>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -125,7 +125,7 @@
                     <h1 class="menu-title">Fern</h1>
 
                     <div class="right-buttons">
-                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
 
@@ -154,38 +154,135 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="what-is-fern"><a class="header" href="#what-is-fern">What is Fern?</a></h1>
-<p>Fern optimizes pipelines built from sequences of function calls. In particular,
-Fern <a href="fusion.html"><em>fuses</em></a> function calls, and produces code that evaluates
-operations back-to-back on small chunks of data as opposed to entire outputs.
-Fern accomplishes this by requiring functions to declare how they produce and
-consume data.</p>
-<p>Fern's core idea is that that fused code naturally separates concerns: inner
-loops handle computation and hardware-specific logic, while outer loops manage
-data movement. Fern uses black-box subroutines to perform computations and uses
-simple dataflow analysis to generate outer loops.</p>
-<p>Our <a href="https://dl.acm.org/doi/10.1145/3729292">paper</a> on <em>Lightweight and
-Locality-Aware Composition of Black-Box Subroutines</em> discusses Fern's design
-philosophy in detail.</p>
-<h3 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h3>
-<p>To get started with Fern, take a look at the <a href="install.html">installation</a>
-instructions.</p>
-<p>The <a href="tutorial/overview.html">tutorial</a> walks through several example Fern programs
-to help you understand how it works in practice.</p>
-<h3 id="talk"><a class="header" href="#talk">Talk</a></h3>
-<p>You can also watch our CppCon talk about Fern. Fern has evolved quite
-a bit since then, but the design philosophy at its core has remained
-the same.</p>
-<div style="text-align: center;">
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/pEcOZDRXhNM?si=8q2EeHAD2LNppECr" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-</div>
+                        <h1 id="matrix-program"><a class="header" href="#matrix-program">Matrix program</a></h1>
+<p>The last piece to unpack before we begin fusing programs is the set of data
+structures we've been using in our program definitions. Just like the <code>add_1</code>
+function, these data structures are also part of the overall program definition
+and contain essential information that Fern uses during code generation and
+execution.</p>
+<p>Let's look at the array object that <code>mk_array</code> produces:</p>
+<pre><code class="language-C++">    auto input = mk_array("input");
+</code></pre>
+<pre><code class="language-C++">class ArrayCPU : public gern::AbstractDataType {
+public:
+    // Array must have a name!
+    ArrayCPU(const std::string &amp;name)
+        : name(name) {
+    }
+    // Get the name to use in codegen. 
+    std::string getName() const override {
+        return name;
+    }
+
+    // Get the type to use in codegen. 
+    std::string getType() const override {
+        return "library::impl::ArrayCPU";
+    }
+
+    // The fields of the array are what we will eventually 
+    // use to tile our program! In this represenatation
+    // x denotes about the start of a subarray, while len
+    // denotes the length of the subarray. Gern attaches
+    // no semantic meaning to these fields, it just promises
+    // to wire then up correctly! The ordering here does play a role!
+    std::vector&lt;Variable&gt; getFields() const override {
+        return {x, len};
+    }
+    // How can gern allocate an array?
+    FunctionSignature getAllocateFunction() const override {
+        return FunctionSignature{
+            .name = "library::impl::ArrayCPU::allocate",
+            .args = {x, len},
+        };
+    }
+    // How can gern free an array?
+    FunctionSignature getFreeFunction() const override {
+        return FunctionSignature{
+            .name = "destroy",
+            .args = {},
+        };
+    }
+    // If gern has a subarray, how can it insert into a parent array?
+    FunctionSignature getInsertFunction() const override {
+        return FunctionSignature{
+            .name = "insert",
+            .args = {x, len},
+        };
+    }
+
+    // If gern wants to extract a subarray, how can it query it?
+    FunctionSignature getQueryFunction() const override {
+        return FunctionSignature{
+            .name = "query",
+            .args = {x, len},
+        };
+    }
+
+protected:
+    std::string name;
+    Variable x{"x"};
+    Variable len{"len"};
+};
+</code></pre>
+<p>Similar to our array example, we could have instead used a matrix
+data structure. Let's take a look at the fieds of the matrix:</p>
+<pre><code class="language-C++">  std::vector&lt;Variable&gt; getFields() const override {
+        return {x, y, l_x, l_y};
+  }
+</code></pre>
+<p>Here, <code>x</code> and <code>y</code> point at the start of a submatrix, while
+<code>l_x</code> and <code>l_y</code> denote its height and width. Similar to the
+array, we can write a program that uses the matrix!</p>
+<pre><code class="language-C++">#include "helpers.h"
+#include "library/matrix/annot/cpu-matrix.h"
+#include "library/matrix/impl/cpu-matrix.h"
+
+    int
+    main()
+{
+    // ***** PROGRAM DEFINITION *****
+    auto input = mk_matrix("input");
+    auto output = mk_matrix("output");
+    auto temp = mk_matrix("temp");
+
+    annot::MatrixAddCPU add_1;
+
+    Composable program({
+        add_1(input, temp),
+        add_1(temp, output),
+    });
+
+    // ***** PROGRAM EVALUATION *****
+    library::impl::MatrixCPU a(10, 10, 10);
+    a.ascending();
+    library::impl::MatrixCPU b(10, 10, 10);
+
+    auto runner = compile_program(program);
+    runner.evaluate({
+        {"input", &amp;a},
+        {"output", &amp;b},
+    });
+
+    // ***** SANITY CHECK *****
+    for (int i = 0; i &lt; a.col; i++)
+    {
+        for (int j = 0; j &lt; a.row; j++)
+        {
+            assert(a(i, j) + 2 == b(i, j));
+        }
+    }
+}
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../tutorial/3_multi_func.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
 
-                            <a rel="next prefetch" href="fusion.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../tutorial/5_tiling.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -195,8 +292,11 @@ the same.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../tutorial/3_multi_func.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
 
-                    <a rel="next prefetch" href="fusion.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../tutorial/5_tiling.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
@@ -211,13 +311,13 @@ the same.</p>
         </script>
 
 
-        <script src="elasticlunr.min.js"></script>
-        <script src="mark.min.js"></script>
-        <script src="searcher.js"></script>
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
 
-        <script src="clipboard.min.js"></script>
-        <script src="highlight.js"></script>
-        <script src="book.js"></script>
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
 

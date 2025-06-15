@@ -3,8 +3,8 @@
 
 ## A Simple Example
 
-Consider a simple function that takes in an array of floats `$a$`, 
-and adds 1 to each element, storing its output in `$b$`:
+Consider a simple function that takes in an array of floats `a`, 
+and adds 1 to each element, storing its output in `b`:
 
 ```C++
 void add_1(float * a, float *b, int N){
