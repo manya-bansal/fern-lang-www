@@ -19,4 +19,5 @@ The tutorial is organized as follows:
 3. [Writing a Multi-Function Pipeline](./3_multi_func.md)
 4. [Understaning Data Structures](./4_multi_dunc_matrix.md)
 5. [Tiling Programs](./5_tiling.md)
-5. [Understanding Legal Tilings](./6_tiling.md)
+6. [Understanding Legal Tilings](./6_tiling.md)
+7. [Tiling Through Reductions](./7_reductions.md)

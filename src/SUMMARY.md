@@ -10,3 +10,4 @@
     - [Demystifying Data Structures](./tutorial/4_multi_func_matrix.md)
     - [Tiling Programs](./tutorial/5_tiling.md)
     - [More Tiled Programs](./tutorial/6_tiling.md)
+    - [Tiling Reduction Loops](./tutorial/7_reductions.md)

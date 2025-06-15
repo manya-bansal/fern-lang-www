@@ -1,7 +1,6 @@
 # Tiling a Matrix Multiply
 
 
-MB: add the fast matrix multiply example
 
 ```C++
 #include "helpers.h"

@@ -319,6 +319,7 @@ automatically inferred.</p>
 <li><a href="tutorial/./4_multi_dunc_matrix.html">Understaning Data Structures</a></li>
 <li><a href="tutorial/./5_tiling.html">Tiling Programs</a></li>
 <li><a href="tutorial/./6_tiling.html">Understanding Legal Tilings</a></li>
+<li><a href="tutorial/./7_reductions.html">Tiling Through Reductions</a></li>
 </ol>
 <div style="break-before: page; page-break-before: always;"></div><h2 id="making-a-function-call-in-fern"><a class="header" href="#making-a-function-call-in-fern">Making a Function Call in Fern</a></h2>
 <p>The easiest program to write in Fern is one that makes a single function call:</p>
@@ -817,6 +818,77 @@ void function_9(library::impl::ArrayCPU &amp;input, library::impl::ArrayCPU &amp
 intends to produce, and each statement yields a data structure. Tilings are
 permitted only for the data structure that is the final output of the current
 program scope.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="reductions"><a class="header" href="#reductions">Reductions</a></h1>
+<pre><code class="language-C++">#include "helpers.h"
+#include "library/array/annot/cpu-array.h"
+#include "library/array/impl/cpu-array.h"
+
+
+Similar to the tiling the output, users can
+introduce tiling over a "Reducible" parameter. For instance, the reduction function shown below takes a parameter `k` that specifies how many elements of array `a` contribute to each output element in array `b`:
+
+```C++
+inline void reduction(ArrayCPU a, ArrayCPU b, int64_t k) {
+    for (int64_t i = 0; i &lt; b.size; i++) {
+        for (int64_t j = 0; j &lt; k; j++) {
+            b.data[i] += a.data[j];
+        }
+    }
+}
+</code></pre>
+<p>The annotation for the function indicates that the function can also be
+split across <code>k</code>.</p>
+<pre><code class="language-C++">return annotate(Tileable(x = Expr(0), output["size"], step,
+                        Computes(
+                            Produces::Subset(output, {x, step}),
+                            Consumes::Subsets(
+                                // Indicate a reducible loop
+                                Reducible(r = Expr(0), k, reduce,
+                                    SubsetObjMany{
+                                    SubsetObj(input, {r, reduce})})))));
+</code></pre>
+<p>The key point is that the reducible parameter must be part of the function interface so that users can tile a reducible loop if needed. A reducible loop is similar to a tilable loop, but with one important distinction: its output is accumulated into a value that is staged outside the loop. This external accumulator enables reduction across tiles or iterations.</p>
+<pre><code class="language-C++">using namespace gern;
+
+int main() {
+    // ***** PROGRAM DEFINITION *****
+    auto input = mk_array("input");
+    auto output = mk_array("output");
+
+    gern::annot::reduction reduce;
+    Variable len("len");
+    Variable tile_size("tile_size");
+
+    Composable program({
+        Reduce(len, tile_size)(
+            reduce(input, output, len)),
+    });
+
+    // ***** PROGRAM EVALUATION *****
+    library::impl::ArrayCPU a(10);
+    a.ascending();
+    library::impl::ArrayCPU b(10);
+    int64_t len_val = 10;
+    int64_t tile_size_val = 2;
+
+    auto runner = compile_program(program);
+    runner.evaluate({
+        {"input", &amp;a},
+        {"output", &amp;b},
+        {"len", &amp;len_val},
+        {"tile_size", &amp;tile_size_val},
+    }); 
+}
+</code></pre>
+<p>The program produces the following code:</p>
+<pre><code class="language-C++">void function_9(library::impl::ArrayCPU &amp;input, library::impl::ArrayCPU &amp;output, int64_t len, int64_t tile_size) {
+    for (int64_t _gern_r_1_5 = 0; (_gern_r_1_5 &lt; len); _gern_r_1_5 = (_gern_r_1_5 + tile_size)) {
+        auto _query_input_10 = input.query(_gern_r_1_5, tile_size);
+
+        library::impl::reduction(_query_input_10, output, tile_size);
+    }
+}
+</code></pre>
 
                     </main>
 
