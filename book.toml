@@ -7,6 +7,6 @@ title = "Fern"
 
 
 [output.html]
-default-theme = "rust"
+default-theme = "light"
 preferred-dark-theme = "coal"
 mathjax-support = true
