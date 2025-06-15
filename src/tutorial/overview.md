@@ -1,5 +1,7 @@
 # Overview
 
+> Fern is now supported by the Gern repository. Gern adds support for GPUs and
+> contains Fern-style CPU support. Gern is under 🚧 active development 🚧.
 
 The tutorial walks you through different programs in Fern with increasing
 complexity. The interface to Fern has changed from the paper, though it is
